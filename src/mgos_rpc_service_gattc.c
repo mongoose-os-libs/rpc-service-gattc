@@ -66,9 +66,8 @@ static void mgos_svc_gattc_open_cb(int conn_id, bool result, void *arg) {
 static void mgos_svc_gattc_open(struct mg_rpc_request_info *ri, void *cb_arg,
                                 struct mg_rpc_frame_info *fi,
                                 struct mg_str args) {
-  int mtu = 0;
   char *addr_str = NULL, *name = NULL;
-  json_scanf(args.p, args.len, ri->args_fmt, &addr_str, &name, &mtu);
+  json_scanf(args.p, args.len, ri->args_fmt, &addr_str, &name);
 
   if (addr_str == NULL && name == NULL) {
     mg_rpc_send_errorf(ri, 400, "addr or name is required");
@@ -79,9 +78,9 @@ static void mgos_svc_gattc_open(struct mg_rpc_request_info *ri, void *cb_arg,
       mg_rpc_send_errorf(ri, 400, "invalid addr");
       goto clean;
     }
-    mgos_bt_gattc_open_addr(addr, mtu, mgos_svc_gattc_open_cb, ri);
+    mgos_bt_gattc_open_addr(addr, mgos_svc_gattc_open_cb, ri);
   } else if (name != NULL) {
-    mgos_bt_gattc_open_name(mg_mk_str(name), mtu, mgos_svc_gattc_open_cb, ri);
+    mgos_bt_gattc_open_name(mg_mk_str(name), mgos_svc_gattc_open_cb, ri);
   }
 
 clean:
@@ -341,7 +340,7 @@ clean:
 bool mgos_rpc_service_gattc_init(void) {
   struct mg_rpc *rpc = mgos_rpc_get_global();
   mg_rpc_add_handler(rpc, "GATTC.Scan", "", mgos_svc_gattc_scan, NULL);
-  mg_rpc_add_handler(rpc, "GATTC.Open", "{addr: %Q, name: %Q, mtu: %d}",
+  mg_rpc_add_handler(rpc, "GATTC.Open", "{addr: %Q, name: %Q}",
                      mgos_svc_gattc_open, NULL);
   mg_rpc_add_handler(rpc, "GATTC.ListServices", "{conn_id: %d}",
                      mgos_svc_gattc_list_services, NULL);
