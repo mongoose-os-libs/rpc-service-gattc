@@ -14,13 +14,14 @@
 #include "common/queue.h"
 
 #include "mgos_rpc.h"
-#include "esp32_bt.h"
+#include "esp32_bt_gattc.h"
 
 static int scan_result_printer(struct json_out *out, va_list *ap) {
   int len = 0;
   int num_res = va_arg(*ap, int);
   const struct mgos_bt_ble_scan_result *res =
       va_arg(*ap, const struct mgos_bt_ble_scan_result *);
+  LOG(LL_INFO, ("Scan: %d results", num_res));
   for (int i = 0; i < num_res; i++, res++) {
     char buf[BT_ADDR_STR_LEN];
     if (i > 0) len += json_printf(out, ", ");
@@ -57,6 +58,10 @@ static void mgos_svc_gattc_scan(struct mg_rpc_request_info *ri, void *cb_arg,
 static void mgos_svc_gattc_open_cb(int conn_id, bool result, void *arg) {
   struct mg_rpc_request_info *ri = (struct mg_rpc_request_info *) arg;
   if (result) {
+    char buf[BT_UUID_STR_LEN];
+    struct esp32_bt_connection bc;
+    mgos_bt_gattc_get_conn_info(conn_id, &bc);
+    LOG(LL_INFO, ("%s -> %d", mgos_bt_addr_to_str(bc.peer_addr, buf), conn_id));
     mg_rpc_send_responsef(ri, "{conn_id: %d}", conn_id);
   } else {
     mg_rpc_send_errorf(ri, -1, "error connecting");
@@ -320,6 +325,62 @@ clean:
   (void) cb_arg;
 }
 
+struct mgos_svc_gattc_subscribe_ctx {
+  struct mg_rpc_request_info *ri;
+};
+
+static void mgos_svc_gattc_subscribe_cb(int conn_id, bool success,
+                                        const struct mg_str value, void *arg) {
+  struct mgos_svc_gattc_subscribe_ctx *ctx =
+      (struct mgos_svc_gattc_subscribe_ctx *) arg;
+  if (ctx->ri != NULL) {
+    if (success) {
+      mg_rpc_send_responsef(ctx->ri, NULL);
+      ctx->ri = NULL;
+    } else {
+      mg_rpc_send_errorf(ctx->ri, -1, "subscribe failed");
+      ctx->ri = NULL;
+      free(ctx);
+    }
+  }
+  if (!success) return;
+  if (value.len > 0) {
+    char buf[BT_UUID_STR_LEN];
+    struct esp32_bt_connection bc;
+    mgos_bt_gattc_get_conn_info(conn_id, &bc);
+    LOG(LL_INFO,
+        ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(bc.peer_addr, buf),
+         (int) value.len, value.p));
+    /* TODO(rojer): Actually do something with data. */
+  }
+}
+
+static void mgos_svc_gattc_subscribe(struct mg_rpc_request_info *ri,
+                                     void *cb_arg, struct mg_rpc_frame_info *fi,
+                                     struct mg_str args) {
+  int conn_id;
+  esp_bt_uuid_t svc_id, char_id;
+  struct json_token unused_value_tok;
+  int unused_value_hex_len;
+  char *unused_value_hex = NULL;
+  if (!get_conn_svc_char_value(ri, args, &conn_id, &svc_id, &char_id,
+                               &unused_value_tok, &unused_value_hex_len,
+                               &unused_value_hex)) {
+    goto clean;
+  }
+
+  struct mgos_svc_gattc_subscribe_ctx *ctx =
+      (struct mgos_svc_gattc_subscribe_ctx *) calloc(1, sizeof(*ctx));
+  ctx->ri = ri;
+
+  mgos_bt_gattc_subscribe(conn_id, &svc_id, &char_id,
+                          mgos_svc_gattc_subscribe_cb, ctx);
+
+clean:
+  (void) fi;
+  (void) cb_arg;
+}
+
 static void mgos_svc_gattc_close(struct mg_rpc_request_info *ri, void *cb_arg,
                                  struct mg_rpc_frame_info *fi,
                                  struct mg_str args) {
@@ -354,6 +415,9 @@ bool mgos_rpc_service_gattc_init(void) {
       rpc, "GATTC.Write",
       "{conn_id: %d, svc_uuid: %Q, char_uuid: %Q, value: %T, value_hex: %H}",
       mgos_svc_gattc_write, NULL);
+  mg_rpc_add_handler(rpc, "GATTC.Subscribe",
+                     "{conn_id: %d, svc_uuid: %Q, char_uuid: %Q}",
+                     mgos_svc_gattc_subscribe, NULL);
   mg_rpc_add_handler(rpc, "GATTC.Close", "{conn_id: %d}", mgos_svc_gattc_close,
                      NULL);
   return true;
