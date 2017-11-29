@@ -27,7 +27,13 @@ static int scan_result_printer(struct json_out *out, va_list *ap) {
     if (i > 0) len += json_printf(out, ", ");
     len += json_printf(out, "{addr: %Q, ", mgos_bt_addr_to_str(res->addr, buf));
     if (res->name[0] != '\0') len += json_printf(out, "name: %Q, ", res->name);
-    len += json_printf(out, "rssi: %d}", res->rssi);
+    len += json_printf(out, "rssi: %d, adv_data_hex: %H", res->rssi,
+                       res->adv_data.len, res->adv_data.p);
+    if (res->scan_rsp.len > 0) {
+      len += json_printf(out, ", scan_rsp_hex: %H", res->scan_rsp.len,
+                         res->scan_rsp.p);
+    }
+    len += json_printf(out, "}");
   }
   return len;
 }
@@ -48,7 +54,13 @@ static void mgos_svc_gattc_scan_cb(int num_res,
 static void mgos_svc_gattc_scan(struct mg_rpc_request_info *ri, void *cb_arg,
                                 struct mg_rpc_frame_info *fi,
                                 struct mg_str args) {
-  mgos_bt_ble_scan(mgos_svc_gattc_scan_cb, ri);
+  int active = false;
+  struct mgos_bt_ble_scan_opts opts = {0}; /* Use defaults */
+  json_scanf(args.p, args.len, ri->args_fmt, &active, &opts.window_ms,
+             &opts.interval_ms, &opts.duration_ms);
+  opts.active = active;
+
+  mgos_bt_ble_scan(&opts, mgos_svc_gattc_scan_cb, ri);
 
   (void) fi;
   (void) cb_arg;
@@ -400,7 +412,10 @@ clean:
 
 bool mgos_rpc_service_gattc_init(void) {
   struct mg_rpc *rpc = mgos_rpc_get_global();
-  mg_rpc_add_handler(rpc, "GATTC.Scan", "", mgos_svc_gattc_scan, NULL);
+  mg_rpc_add_handler(
+      rpc, "GATTC.Scan",
+      "{active: %B, window_ms: %d, interval_ms: %d, duration_ms: %d}",
+      mgos_svc_gattc_scan, NULL);
   mg_rpc_add_handler(rpc, "GATTC.Open", "{addr: %Q, name: %Q}",
                      mgos_svc_gattc_open, NULL);
   mg_rpc_add_handler(rpc, "GATTC.ListServices", "{conn_id: %d}",
