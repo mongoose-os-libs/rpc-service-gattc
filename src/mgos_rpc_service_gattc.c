@@ -16,6 +16,11 @@
 #include "mgos_rpc.h"
 #include "esp32_bt_gattc.h"
 
+/*
+ * Format for the output params for GATTC.Subscribe.
+ */
+#define GATTC_SUB_OUTPUT_FMT "{filename: %Q, max_file_size: %d}"
+
 static int scan_result_printer(struct json_out *out, va_list *ap) {
   int len = 0;
   int num_res = va_arg(*ap, int);
@@ -339,6 +344,19 @@ clean:
 
 struct mgos_svc_gattc_subscribe_ctx {
   struct mg_rpc_request_info *ri;
+
+  /*
+   * output settings: if `fp` is not NULL, then data is written there;
+   * otherwise it goes to the console. `written` is the total number of bytes
+   * written, and if `max_file_size` is greater than zero, then written never
+   * goes above it.
+   *
+   * FIXME: At present, file is never closed. We have no way of knowing when
+   * the connection is closed; when we do, this should be fixed.
+   */
+  FILE *fp;
+  int max_file_size;
+  int written;
 };
 
 static void mgos_svc_gattc_subscribe_cb(int conn_id, bool success,
@@ -360,10 +378,23 @@ static void mgos_svc_gattc_subscribe_cb(int conn_id, bool success,
     char buf[BT_UUID_STR_LEN];
     struct esp32_bt_connection bc;
     mgos_bt_gattc_get_conn_info(conn_id, &bc);
-    LOG(LL_INFO,
-        ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(bc.peer_addr, buf),
-         (int) value.len, value.p));
-    /* TODO(rojer): Actually do something with data. */
+    if (ctx->fp == NULL) {
+      /* Output filename was not given, write data to log */
+      LOG(LL_INFO,
+          ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(bc.peer_addr, buf),
+           (int) value.len, value.p));
+    } else {
+      /* Write data to the given file */
+      int len = value.len;
+      if (ctx->max_file_size > 0 && len > (ctx->max_file_size - ctx->written)) {
+        len = ctx->max_file_size - ctx->written;
+      }
+      if (len > 0) {
+        fwrite(value.p, len, 1, ctx->fp);
+        fflush(ctx->fp);
+        ctx->written += len;
+      }
+    }
   }
 }
 
@@ -375,6 +406,8 @@ static void mgos_svc_gattc_subscribe(struct mg_rpc_request_info *ri,
   struct json_token unused_value_tok;
   int unused_value_hex_len;
   char *unused_value_hex = NULL;
+  char *filename = NULL;
+
   if (!get_conn_svc_char_value(ri, args, &conn_id, &svc_id, &char_id,
                                &unused_value_tok, &unused_value_hex_len,
                                &unused_value_hex)) {
@@ -384,6 +417,14 @@ static void mgos_svc_gattc_subscribe(struct mg_rpc_request_info *ri,
   struct mgos_svc_gattc_subscribe_ctx *ctx =
       (struct mgos_svc_gattc_subscribe_ctx *) calloc(1, sizeof(*ctx));
   ctx->ri = ri;
+
+  json_scanf(args.p, args.len, "{output: " GATTC_SUB_OUTPUT_FMT "}", &filename,
+             &ctx->max_file_size);
+  if (filename != NULL) {
+    ctx->fp = fopen(filename, "wb");
+    free(filename);
+    filename = NULL;
+  }
 
   mgos_bt_gattc_subscribe(conn_id, &svc_id, &char_id,
                           mgos_svc_gattc_subscribe_cb, ctx);
@@ -431,7 +472,8 @@ bool mgos_rpc_service_gattc_init(void) {
       "{conn_id: %d, svc_uuid: %Q, char_uuid: %Q, value: %T, value_hex: %H}",
       mgos_svc_gattc_write, NULL);
   mg_rpc_add_handler(rpc, "GATTC.Subscribe",
-                     "{conn_id: %d, svc_uuid: %Q, char_uuid: %Q}",
+                     "{conn_id: %d, svc_uuid: %Q, char_uuid: %Q, "
+                     "output: " GATTC_SUB_OUTPUT_FMT "}",
                      mgos_svc_gattc_subscribe, NULL);
   mg_rpc_add_handler(rpc, "GATTC.Close", "{conn_id: %d}", mgos_svc_gattc_close,
                      NULL);
