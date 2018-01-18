@@ -13,8 +13,8 @@
 #include "common/mbuf.h"
 #include "common/queue.h"
 
-#include "mgos_rpc.h"
 #include "esp32_bt_gattc.h"
+#include "mgos_rpc.h"
 
 /*
  * Format for the output params for GATTC.Subscribe.
@@ -122,8 +122,8 @@ static int service_id_printer(struct json_out *out, va_list *ap) {
     char buf[BT_UUID_STR_LEN];
     if (i > 0) len += json_printf(out, ", ");
     len += json_printf(out, "{uuid: %Q, instance: %d, primary: %B}",
-                       mgos_bt_uuid_to_str(&res->id.uuid, buf), res->id.inst_id,
-                       res->is_primary);
+                       esp32_bt_uuid_to_str(&res->id.uuid, buf),
+                       res->id.inst_id, res->is_primary);
   }
   return len;
 }
@@ -182,7 +182,7 @@ static int char_id_printer(struct json_out *out, va_list *ap) {
 }
 
 static void mgos_svc_gattc_list_chars_cb(
-    int conn_id, const esp_bt_uuid_t *svc_id, int num_res,
+    int conn_id, const struct mgos_bt_uuid *svc_id, int num_res,
     const struct mgos_bt_gattc_list_chars_result *res, void *arg) {
   struct mg_rpc_request_info *ri = (struct mg_rpc_request_info *) arg;
   if (num_res < 0) {
@@ -208,7 +208,7 @@ static void mgos_svc_gattc_list_chars(struct mg_rpc_request_info *ri,
     goto clean;
   }
 
-  esp_bt_uuid_t svc_id;
+  struct mgos_bt_uuid svc_id;
   if (!mgos_bt_uuid_from_str(mg_mk_str(svc_uuid_str), &svc_id)) {
     mg_rpc_send_errorf(ri, 400, "invalid svc_uuid");
     goto clean;
@@ -224,8 +224,8 @@ clean:
 
 static bool get_conn_svc_char_value(struct mg_rpc_request_info *ri,
                                     const struct mg_str args, int *conn_id,
-                                    esp_bt_uuid_t *svc_id,
-                                    esp_bt_uuid_t *char_id,
+                                    struct mgos_bt_uuid *svc_id,
+                                    struct mgos_bt_uuid *char_id,
                                     struct json_token *value_tok,
                                     int *value_hex_len, char **value_hex) {
   bool result = false;
@@ -282,7 +282,7 @@ static void mgos_svc_gattc_read(struct mg_rpc_request_info *ri, void *cb_arg,
                                 struct mg_rpc_frame_info *fi,
                                 struct mg_str args) {
   int conn_id;
-  esp_bt_uuid_t svc_id, char_id;
+  struct mgos_bt_uuid svc_id, char_id;
   struct json_token unused_value_tok;
   int unused_value_hex_len;
   char *unused_value_hex = NULL;
@@ -314,7 +314,7 @@ static void mgos_svc_gattc_write(struct mg_rpc_request_info *ri, void *cb_arg,
                                  struct mg_rpc_frame_info *fi,
                                  struct mg_str args) {
   int conn_id;
-  esp_bt_uuid_t svc_id, char_id;
+  struct mgos_bt_uuid svc_id, char_id;
   struct json_token value_tok = JSON_INVALID_TOKEN;
   int value_hex_len = -1;
   char *value_hex = NULL;
@@ -404,7 +404,7 @@ static void mgos_svc_gattc_subscribe(struct mg_rpc_request_info *ri,
                                      void *cb_arg, struct mg_rpc_frame_info *fi,
                                      struct mg_str args) {
   int conn_id;
-  esp_bt_uuid_t svc_id, char_id;
+  struct mgos_bt_uuid svc_id, char_id;
   struct json_token unused_value_tok;
   int unused_value_hex_len;
   char *unused_value_hex = NULL;
