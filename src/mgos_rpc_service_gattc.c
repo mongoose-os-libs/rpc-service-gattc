@@ -30,7 +30,8 @@ static int scan_result_printer(struct json_out *out, va_list *ap) {
   for (int i = 0; i < num_res; i++, res++) {
     char buf[BT_ADDR_STR_LEN];
     if (i > 0) len += json_printf(out, ", ");
-    len += json_printf(out, "{addr: %Q, ", mgos_bt_addr_to_str(res->addr, buf));
+    len +=
+        json_printf(out, "{addr: %Q, ", mgos_bt_addr_to_str(&res->addr, buf));
     if (res->name[0] != '\0') len += json_printf(out, "name: %Q, ", res->name);
     len += json_printf(out, "rssi: %d, adv_data_hex: %H", res->rssi,
                        res->adv_data.len, res->adv_data.p);
@@ -78,7 +79,8 @@ static void mgos_svc_gattc_open_cb(int conn_id, bool result, void *arg) {
     char buf[BT_UUID_STR_LEN];
     struct esp32_bt_connection bc;
     mgos_bt_gattc_get_conn_info(conn_id, &bc);
-    LOG(LL_INFO, ("%s -> %d", mgos_bt_addr_to_str(bc.peer_addr, buf), conn_id));
+    LOG(LL_INFO,
+        ("%s -> %d", mgos_bt_addr_to_str(&bc.peer_addr, buf), conn_id));
     mg_rpc_send_responsef(ri, "{conn_id: %d}", conn_id);
   } else {
     mg_rpc_send_errorf(ri, -1, "error connecting");
@@ -95,12 +97,12 @@ static void mgos_svc_gattc_open(struct mg_rpc_request_info *ri, void *cb_arg,
     mg_rpc_send_errorf(ri, 400, "addr or name is required");
     goto clean;
   } else if (addr_str != NULL) {
-    esp_bd_addr_t addr;
-    if (!mgos_bt_addr_from_str(mg_mk_str(addr_str), addr)) {
+    struct mgos_bt_addr addr;
+    if (!mgos_bt_addr_from_str(mg_mk_str(addr_str), &addr)) {
       mg_rpc_send_errorf(ri, 400, "invalid addr");
       goto clean;
     }
-    mgos_bt_gattc_open_addr(addr, mgos_svc_gattc_open_cb, ri);
+    mgos_bt_gattc_open_addr(&addr, mgos_svc_gattc_open_cb, ri);
   } else if (name != NULL) {
     mgos_bt_gattc_open_name(mg_mk_str(name), mgos_svc_gattc_open_cb, ri);
   }
@@ -381,7 +383,7 @@ static void mgos_svc_gattc_subscribe_cb(int conn_id, bool success,
     if (ctx->fp == NULL) {
       /* Output filename was not given, write data to log */
       LOG(LL_INFO,
-          ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(bc.peer_addr, buf),
+          ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(&bc.peer_addr, buf),
            (int) value.len, value.p));
     } else {
       /* Write data to the given file */
