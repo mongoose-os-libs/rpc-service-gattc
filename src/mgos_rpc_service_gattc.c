@@ -428,8 +428,8 @@ static void mgos_svc_gattc_subscribe(struct mg_rpc_request_info *ri,
     filename = NULL;
   }
 
-  mgos_bt_gattc_subscribe(conn_id, &svc_id, &char_id,
-                          mgos_svc_gattc_subscribe_cb, ctx);
+  esp32_gattc_subscribe(conn_id, &svc_id, &char_id, mgos_svc_gattc_subscribe_cb,
+                        ctx);
 
 clean:
   (void) fi;
