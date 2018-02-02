@@ -9,6 +9,7 @@
 #include "esp_gap_ble_api.h"
 #include "esp_gattc_api.h"
 
+#include "common/cs_dbg.h"
 #include "common/json_utils.h"
 #include "common/mbuf.h"
 #include "common/queue.h"
