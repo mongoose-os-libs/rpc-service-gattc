@@ -43,8 +43,8 @@ static int scan_result_printer(struct json_out *out, va_list *ap) {
   for (int i = 0; i < num_res; i++, res++) {
     char buf[BT_ADDR_STR_LEN];
     if (i > 0) len += json_printf(out, ", ");
-    len +=
-        json_printf(out, "{addr: %Q, ", mgos_bt_addr_to_str(&res->addr, buf));
+    len += json_printf(out, "{addr: %Q, ",
+                       mgos_bt_addr_to_str(&res->addr, 0, buf));
     if (res->name[0] != '\0') len += json_printf(out, "name: %Q, ", res->name);
     len += json_printf(out, "rssi: %d, adv_data_hex: %H", res->rssi,
                        res->adv_data.len, res->adv_data.p);
@@ -93,7 +93,7 @@ static void mgos_svc_gattc_open_cb(int conn_id, bool result, void *arg) {
     struct esp32_bt_connection bc;
     mgos_bt_gattc_get_conn_info(conn_id, &bc);
     LOG(LL_INFO,
-        ("%s -> %d", mgos_bt_addr_to_str(&bc.peer_addr, buf), conn_id));
+        ("%s -> %d", mgos_bt_addr_to_str(&bc.peer_addr, 0, buf), conn_id));
     mg_rpc_send_responsef(ri, "{conn_id: %d}", conn_id);
   } else {
     mg_rpc_send_errorf(ri, -1, "error connecting");
@@ -396,7 +396,7 @@ static void mgos_svc_gattc_subscribe_cb(int conn_id, bool success,
     if (ctx->fp == NULL) {
       /* Output filename was not given, write data to log */
       LOG(LL_INFO,
-          ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(&bc.peer_addr, buf),
+          ("%d (%s): %.*s", conn_id, mgos_bt_addr_to_str(&bc.peer_addr, 0, buf),
            (int) value.len, value.p));
     } else {
       /* Write data to the given file */
