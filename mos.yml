@@ -5,8 +5,8 @@ version: 1.0
 sources:
   - src
 libs:
-  - origin: https://github.com/mongoose-os-libs/bt-common
-  - origin: https://github.com/mongoose-os-libs/rpc-common
+  - location: https://github.com/mongoose-os-libs/bt-common
+  - location: https://github.com/mongoose-os-libs/rpc-common
 tags:
   - bt
   - c
